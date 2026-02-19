@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!-- <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -29,7 +29,7 @@
         button:hover { opacity: 0.9; }
         button.outline { background: transparent; border: 2px solid var(--primary); color: var(--primary); }
         
-        /* --- NEW FILTER BAR STYLES --- */
+        /* --- FILTER BAR STYLES --- */
         .filter-bar {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
@@ -107,30 +107,37 @@
             <label>🔎 Search Action Item</label>
             <input type="text" id="filter-text" placeholder="Type to search..." onkeyup="applyFilters()">
         </div>
+        
         <div class="filter-group">
-            <label>📂 Category</label>
+            <label>Category</label>
             <select id="filter-category" onchange="applyFilters()">
                 <option value="">All Categories</option>
-                <option value="System & Tech">System & Tech</option>
-                <option value="HR & Policy">HR & Policy</option>
-                <option value="Ops & Training">Ops & Training</option>
-                <option value="Data & Reporting">Data & Reporting</option>
             </select>
         </div>
+
         <div class="filter-group">
-            <label>👤 Owner</label>
+            <label>Owner</label>
             <input type="text" id="filter-owner" placeholder="Filter by owner..." onkeyup="applyFilters()">
         </div>
+
         <div class="filter-group">
-            <label>📌 Status</label>
-            <select id="filter-status" onchange="applyFilters()">
-                <option value="">All Statuses</option>
-                <option value="Not Started">Not Started</option>
-                <option value="WIP">WIP</option>
-                <option value="Closed">Closed</option>
-                <option value="Overdue">⚠️ Overdue Only</option>
+            <label>Priority</label>
+            <select id="filter-priority" onchange="applyFilters()">
+                <option value="">All Priorities</option>
+                <option value="High">High</option>
+                <option value="Medium">Medium</option>
+                <option value="Low">Low</option>
             </select>
         </div>
+
+        <div class="filter-group">
+            <label>Status</label>
+            <select id="filter-status" onchange="applyFilters()">
+                <option value="">All Statuses</option>
+                <option value="Overdue">Overdue Only</option>
+            </select>
+        </div>
+
         <div class="filter-group" style="display: flex; align-items: flex-end;">
             <button class="outline" onclick="clearFilters()" style="padding: 0.5rem 1rem; font-size: 0.9rem;">Clear</button>
         </div>
@@ -185,7 +192,7 @@
     </div>
 
     <script>
-        const API_URL = 'https://mom-z2cz.onrender.com/tasks';
+        const API_URL = 'https://mom-seven-bay.vercel.app/tasks';
         let allTasks = []; // Store ALL data here
         let displayedTasks = []; // Store FILTERED data here
 
@@ -194,42 +201,73 @@
             try {
                 const res = await fetch(API_URL);
                 allTasks = await res.json();
-                applyFilters(); // Initial render uses filters (which are empty at start)
+                
+                // Populate filters dynamically from DB data
+                populateFilters();
+                
+                applyFilters(); // Initial render uses filters
             } catch (err) { console.error("API Error:", err); }
         }
 
-        // === 2. Filter Logic (Local Only) ===
+        // === 2. Populate Filters (New Function) ===
+        function populateFilters() {
+            // Get Unique Categories
+            const categories = [...new Set(allTasks.map(t => t.category).filter(Boolean))].sort();
+            const catSelect = document.getElementById('filter-category');
+            const currentCat = catSelect.value;
+            
+            catSelect.innerHTML = '<option value="">All Categories</option>';
+            categories.forEach(cat => {
+                const option = document.createElement('option');
+                option.value = cat;
+                option.innerText = cat;
+                catSelect.appendChild(option);
+            });
+            catSelect.value = currentCat;
+
+            // Get Unique Statuses
+            const statuses = [...new Set(allTasks.map(t => t.status).filter(Boolean))].sort();
+            const statSelect = document.getElementById('filter-status');
+            const currentStat = statSelect.value;
+
+            statSelect.innerHTML = `
+                <option value="">All Statuses</option>
+                <option value="Overdue">Overdue Only</option>
+            `;
+            statuses.forEach(stat => {
+                const option = document.createElement('option');
+                option.value = stat;
+                option.innerText = stat;
+                statSelect.appendChild(option);
+            });
+            statSelect.value = currentStat;
+        }
+
+        // === 3. Filter Logic (Local Only) ===
         function applyFilters() {
             const searchText = document.getElementById('filter-text').value.toLowerCase();
             const categoryVal = document.getElementById('filter-category').value;
             const ownerText = document.getElementById('filter-owner').value.toLowerCase();
             const statusVal = document.getElementById('filter-status').value;
+            const priorityVal = document.getElementById('filter-priority').value;
 
             displayedTasks = allTasks.filter(task => {
-                // 1. Text Search
                 const matchesText = (task.desc || "").toLowerCase().includes(searchText);
-                
-                // 2. Category Filter
                 const matchesCategory = categoryVal === "" || (task.category || "") === categoryVal;
-                
-                // 3. Owner Filter
                 const matchesOwner = (task.owner || "").toLowerCase().includes(ownerText);
+                const matchesPriority = priorityVal === "" || (task.priority || "") === priorityVal;
 
-                // 4. Status Filter
                 let matchesStatus = true;
                 if (statusVal === "Overdue") {
-                    // Special logic for overdue
                     matchesStatus = task.targetDate && new Date(task.targetDate) < new Date() && task.status !== 'Closed';
                 } else if (statusVal !== "") {
                     matchesStatus = task.status === statusVal;
                 }
 
-                return matchesText && matchesCategory && matchesOwner && matchesStatus;
+                return matchesText && matchesCategory && matchesOwner && matchesStatus && matchesPriority;
             });
 
             renderTable();
-            updateStats(); // Update stats based on filtered view OR full view? usually full view is better for stats.
-            // Let's keep stats based on FULL data so you always see project health
             updateStats(allTasks); 
         }
 
@@ -238,10 +276,11 @@
             document.getElementById('filter-category').value = "";
             document.getElementById('filter-owner').value = "";
             document.getElementById('filter-status').value = "";
+            document.getElementById('filter-priority').value = "";
             applyFilters();
         }
 
-        // === 3. Render Table ===
+        // === 4. Render Table ===
         function renderTable() {
             const tbody = document.getElementById('table-body');
             tbody.innerHTML = '';
@@ -276,7 +315,7 @@
             });
         }
 
-        // === 4. Dashboard Stats (Always calculates on FULL dataset) ===
+        // === 5. Dashboard Stats ===
         function updateStats(dataSet = allTasks) {
             const total = dataSet.length;
             const closed = dataSet.filter(t => t.status === 'Closed').length;
@@ -292,7 +331,7 @@
             document.getElementById('progress-bar').style.width = rate + '%';
         }
 
-        // === 5. CRUD Operations (Same as before) ===
+        // === 6. CRUD Operations ===
         function openModal() { document.getElementById('taskModal').classList.add('active'); document.querySelector('form').reset(); document.getElementById('inp-id').value = ""; }
         function closeModal() { document.getElementById('taskModal').classList.remove('active'); }
 
@@ -327,7 +366,7 @@
             const url = id ? `${API_URL}/${id}` : API_URL;
             await fetch(url, { method: method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
             closeModal();
-            fetchTasks(); // Reloads data and re-applies filters
+            fetchTasks(); 
         }
 
         async function deleteTask(id) {
@@ -338,7 +377,6 @@
         }
 
         function exportToCSV() {
-            // Export the FILTERED list, or change to allTasks to export everything
             let dataToExport = displayedTasks; 
             let csvContent = "data:text/csv;charset=utf-8,Category,Action Item,Owner,Priority,Target Date,Status,Remarks\n";
             dataToExport.forEach(t => {
@@ -346,6 +384,507 @@
                 const desc = `"${(t.desc || '').replace(/"/g, '""')}"`;
                 const remarks = `"${(t.remarks || '').replace(/"/g, '""')}"`;
                 csvContent += [t.category, desc, t.owner, t.priority, date, t.status, remarks].join(",") + "\r\n";
+            });
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", "MOM_Tracker_Export.csv");
+            document.body.appendChild(link);
+            link.click();
+        }
+
+        // Initial Load
+        fetchTasks();
+    </script>
+</body>
+</html> -->
+
+
+
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MOM Action Tracker</title>
+    <style>
+        :root { --primary: #2563eb; --bg: #f8fafc; --surface: #ffffff; --text: #1e293b; --border: #e2e8f0; --danger: #ef4444; --success: #10b981; }
+        * { box-sizing: border-box; font-family: 'Segoe UI', system-ui, sans-serif; }
+        body { background-color: var(--bg); color: var(--text); padding: 2rem; max-width: 1400px; margin: 0 auto; }
+        
+        /* HEADER SECTION */
+        header { display: flex; align-items: center; gap: 1.5rem; background: var(--surface); padding: 1rem 1.5rem; border-radius: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); margin-bottom: 2rem; border: 1px solid var(--border); }
+        header img { height: 50px; width: auto; }
+        header h1 { margin: 0; font-size: 1.5rem; font-weight: 700; color: var(--primary); }
+
+        /* Dashboard */
+        .dashboard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; margin-bottom: 2rem; }
+        .card { background: var(--surface); padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); border: 1px solid var(--border); }
+        .stat-label { font-size: 0.875rem; color: #64748b; font-weight: 600; text-transform: uppercase; }
+        .stat-value { font-size: 2rem; font-weight: 700; margin-top: 0.5rem; }
+        .text-red { color: var(--danger); } 
+        .progress-bg { height: 10px; background: #e2e8f0; border-radius: 5px; margin-top: 10px; overflow: hidden; }
+        .progress-fill { height: 100%; background: var(--success); width: 0%; transition: width 0.5s ease; }
+
+        /* Controls */
+        .controls { display: flex; justify-content: space-between; margin-bottom: 1rem; align-items: center; }
+        button { background: var(--primary); color: white; border: none; padding: 0.75rem 1.5rem; border-radius: 8px; cursor: pointer; font-weight: 600; transition: 0.2s; }
+        button:hover { opacity: 0.9; }
+        button.outline { background: transparent; border: 2px solid var(--primary); color: var(--primary); }
+        
+        /* --- FILTER BAR STYLES --- */
+        .filter-bar {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1rem;
+            background: #e2e8f0;
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1.5rem;
+            align-items: center;
+        }
+        .filter-group label { display: block; font-size: 0.8rem; font-weight: 600; color: #64748b; margin-bottom: 0.25rem; }
+        .filter-group input, .filter-group select { width: 100%; padding: 0.5rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.9rem; }
+
+        /* Grouped Tables & Accordions */
+        .date-group-header {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-left: 5px solid var(--primary);
+            padding: 1rem 1.5rem;
+            font-weight: 600;
+            font-size: 1.1rem;
+            margin-top: 1.5rem;
+            margin-bottom: 0.5rem;
+            border-radius: 8px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+            transition: 0.2s;
+        }
+        .date-group-header:hover { background: #f1f5f9; }
+        .date-group-content { display: block; }
+        .date-group-content.collapsed { display: none; }
+        .toggle-icon { transition: transform 0.3s ease; }
+        .collapsed .toggle-icon { transform: rotate(-90deg); }
+
+        /* Table */
+        .table-container { overflow-x: auto; background: white; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
+        table { width: 100%; border-collapse: collapse; min-width: 900px; }
+        th, td { padding: 1rem; text-align: left; border-bottom: 1px solid var(--border); vertical-align: middle; }
+        th { background: #f1f5f9; font-weight: 600; color: #475569; }
+        
+        /* Badges & Buttons */
+        .badge { padding: 0.25rem 0.75rem; border-radius: 999px; font-size: 0.75rem; font-weight: 600; }
+        .badge-high { background: #fee2e2; color: #991b1b; }
+        .badge-med { background: #fef3c7; color: #92400e; }
+        .badge-low { background: #d1fae5; color: #065f46; }
+        .badge-closed { background: #dcfce7; color: #166534; }
+        .badge-wip { background: #e0f2fe; color: #075985; }
+        .badge-overdue { background: #7f1d1d; color: white; }
+        .action-btn { background: transparent; padding: 5px; font-size: 1.1rem; margin-right: 5px; color: #64748b; border: none; cursor: pointer; }
+        .action-btn:hover { background: #f1f5f9; border-radius: 4px; }
+
+        /* Modal */
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); align-items: center; justify-content: center; z-index: 1000; }
+        .modal.active { display: flex; }
+        .modal-content { background: white; padding: 2rem; border-radius: 12px; width: 550px; max-height: 90vh; overflow-y: auto; animation: slideIn 0.2s ease; }
+        @keyframes slideIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        
+        .form-group { margin-bottom: 1rem; }
+        label { display: block; margin-bottom: 0.5rem; font-weight: 500; font-size: 0.875rem; }
+        input, select, textarea { width: 100%; padding: 0.75rem; border: 1px solid var(--border); border-radius: 8px; font-size: 0.95rem; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <img src="https://ik.imagekit.io/hiteshh12/logo.png" alt="Company Logo" onerror="this.style.display='none'"> 
+        <div>
+            <h1>MOM Action Tracker</h1>
+            <span style="color: #64748b; font-size: 0.9rem;">Internal Tracking System</span>
+        </div>
+    </header>
+
+    <div class="dashboard-grid">
+        <div class="card"><div class="stat-label">Total Tasks</div><div class="stat-value" id="stat-total">0</div></div>
+        <div class="card"><div class="stat-label">Pending / WIP</div><div class="stat-value" id="stat-wip">0</div></div>
+        <div class="card"><div class="stat-label">Overdue</div><div class="stat-value text-red" id="stat-overdue">0</div></div>
+        <div class="card">
+            <div class="stat-label">Completion Rate</div>
+            <div style="display:flex; align-items:center; gap:10px;">
+                <div class="stat-value" style="color:var(--success)" id="stat-rate">0%</div>
+            </div>
+            <div class="progress-bg"><div class="progress-fill" id="progress-bar"></div></div>
+        </div>
+    </div>
+
+    <div class="controls">
+        <h2 style="margin:0; font-size:1.2rem; color:var(--text);">Action Items</h2>
+        <div style="gap: 10px; display: flex;">
+            <button class="outline" onclick="exportToCSV()">⬇ Download CSV</button>
+            <button onclick="openModal()">+ Add New Item</button>
+        </div>
+    </div>
+
+    <div class="filter-bar">
+        <div class="filter-group">
+            <label>🔎 Search Action Item</label>
+            <input type="text" id="filter-text" placeholder="Type to search..." onkeyup="applyFilters()">
+        </div>
+        
+        <div class="filter-group">
+            <label>Category</label>
+            <select id="filter-category" onchange="applyFilters()">
+                <option value="">All Categories</option>
+            </select>
+        </div>
+
+        <div class="filter-group">
+            <label>Owner</label>
+            <input type="text" id="filter-owner" placeholder="Filter by owner..." onkeyup="applyFilters()">
+        </div>
+
+        <div class="filter-group">
+            <label>Priority</label>
+            <select id="filter-priority" onchange="applyFilters()">
+                <option value="">All Priorities</option>
+                <option value="High">High</option>
+                <option value="Medium">Medium</option>
+                <option value="Low">Low</option>
+            </select>
+        </div>
+
+        <div class="filter-group">
+            <label>Status</label>
+            <select id="filter-status" onchange="applyFilters()">
+                <option value="">All Statuses</option>
+                <option value="Overdue">Overdue Only</option>
+            </select>
+        </div>
+
+        <div class="filter-group" style="display: flex; align-items: flex-end;">
+            <button class="outline" onclick="clearFilters()" style="padding: 0.5rem 1rem; font-size: 0.9rem;">Clear</button>
+        </div>
+    </div>
+
+    <div id="grouped-tables-container"></div>
+
+    <div class="modal" id="taskModal">
+        <div class="modal-content">
+            <h3 id="modal-title" style="margin-top:0;">Add New Task</h3>
+            <form onsubmit="saveTask(event)">
+                <input type="hidden" id="inp-id">
+                
+                <div class="form-grid" style="display:grid; grid-template-columns: 1fr 1fr; gap:1rem;">
+                    <div class="form-group">
+                        <label>Discussion Date</label>
+                        <input type="date" id="inp-disc-date" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Category</label>
+                        <input type="text" id="inp-category" placeholder="e.g. System, HR, Ops" required list="category-suggestions">
+                        <datalist id="category-suggestions">
+                            <option value="System & Tech"><option value="HR & Policy"><option value="Ops & Training"><option value="Data & Reporting">
+                        </datalist>
+                    </div>
+                </div>
+
+                <div class="form-group"><label>Action Item</label><input type="text" id="inp-desc" required></div>
+                
+                <div class="form-grid" style="display:grid; grid-template-columns: 1fr 1fr; gap:1rem;">
+                    <div class="form-group"><label>Owner</label><input type="text" id="inp-owner"></div>
+                    <div class="form-group"><label>Priority</label><select id="inp-priority"><option>High</option><option selected>Medium</option><option>Low</option></select></div>
+                </div>
+                
+                <div class="form-grid" style="display:grid; grid-template-columns: 1fr 1fr; gap:1rem;">
+                    <div class="form-group"><label>Target Date</label><input type="date" id="inp-date"></div>
+                    <div class="form-group"><label>Status</label><select id="inp-status"><option>Not Started</option><option>WIP</option><option>Closed</option></select></div>
+                </div>
+                
+                <div class="form-group"><label>Remarks</label><textarea id="inp-remarks" rows="2"></textarea></div>
+                
+                <div style="text-align:right; margin-top:1.5rem;">
+                    <button type="button" class="outline" onclick="closeModal()">Cancel</button>
+                    <button type="submit">Save Task</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'https://mom-seven-bay.vercel.app/tasks';
+        let allTasks = []; 
+        let displayedTasks = []; 
+
+        // === 1. Fetch & Init ===
+        async function fetchTasks() {
+            try {
+                const res = await fetch(API_URL);
+                allTasks = await res.json();
+                
+                populateFilters();
+                applyFilters(); 
+            } catch (err) { console.error("API Error:", err); }
+        }
+
+        // === 2. Populate Filters ===
+        function populateFilters() {
+            const categories = [...new Set(allTasks.map(t => t.category).filter(Boolean))].sort();
+            const catSelect = document.getElementById('filter-category');
+            const currentCat = catSelect.value;
+            
+            catSelect.innerHTML = '<option value="">All Categories</option>';
+            categories.forEach(cat => {
+                const option = document.createElement('option');
+                option.value = cat;
+                option.innerText = cat;
+                catSelect.appendChild(option);
+            });
+            catSelect.value = currentCat;
+
+            const statuses = [...new Set(allTasks.map(t => t.status).filter(Boolean))].sort();
+            const statSelect = document.getElementById('filter-status');
+            const currentStat = statSelect.value;
+
+            statSelect.innerHTML = `
+                <option value="">All Statuses</option>
+                <option value="Overdue">Overdue Only</option>
+            `;
+            statuses.forEach(stat => {
+                const option = document.createElement('option');
+                option.value = stat;
+                option.innerText = stat;
+                statSelect.appendChild(option);
+            });
+            statSelect.value = currentStat;
+        }
+
+        // === 3. Filter Logic ===
+        function applyFilters() {
+            const searchText = document.getElementById('filter-text').value.toLowerCase();
+            const categoryVal = document.getElementById('filter-category').value;
+            const ownerText = document.getElementById('filter-owner').value.toLowerCase();
+            const statusVal = document.getElementById('filter-status').value;
+            const priorityVal = document.getElementById('filter-priority').value;
+
+            displayedTasks = allTasks.filter(task => {
+                const matchesText = (task.desc || "").toLowerCase().includes(searchText);
+                const matchesCategory = categoryVal === "" || (task.category || "") === categoryVal;
+                const matchesOwner = (task.owner || "").toLowerCase().includes(ownerText);
+                const matchesPriority = priorityVal === "" || (task.priority || "") === priorityVal;
+
+                let matchesStatus = true;
+                if (statusVal === "Overdue") {
+                    matchesStatus = task.targetDate && new Date(task.targetDate) < new Date() && task.status !== 'Closed';
+                } else if (statusVal !== "") {
+                    matchesStatus = task.status === statusVal;
+                }
+
+                return matchesText && matchesCategory && matchesOwner && matchesStatus && matchesPriority;
+            });
+
+            renderGroupedTables();
+            updateStats(allTasks); 
+        }
+
+        function clearFilters() {
+            document.getElementById('filter-text').value = "";
+            document.getElementById('filter-category').value = "";
+            document.getElementById('filter-owner').value = "";
+            document.getElementById('filter-status').value = "";
+            document.getElementById('filter-priority').value = "";
+            applyFilters();
+        }
+
+        // === 4. Render Grouped Tables (New Logic) ===
+        function renderGroupedTables() {
+            const container = document.getElementById('grouped-tables-container');
+            container.innerHTML = '';
+            
+            if(displayedTasks.length === 0) {
+                container.innerHTML = '<div style="text-align:center; padding:2rem; color:#64748b; background:white; border-radius:12px; border:1px solid var(--border)">No matching tasks found</div>';
+                return;
+            }
+
+            // Group tasks by discussionDate
+            const grouped = {};
+            displayedTasks.forEach(task => {
+                const dDate = task.discussionDate ? task.discussionDate.split('T')[0] : 'Unspecified Date';
+                if(!grouped[dDate]) grouped[dDate] = [];
+                grouped[dDate].push(task);
+            });
+
+            // Sort dates descending (newest first)
+            const sortedDates = Object.keys(grouped).sort((a, b) => {
+                if(a === 'Unspecified Date') return 1; // Send unspecified to bottom
+                if(b === 'Unspecified Date') return -1;
+                return new Date(b) - new Date(a);
+            });
+
+            // Generate HTML for each group
+            sortedDates.forEach((date, index) => {
+                const tasks = grouped[date];
+                const safeId = `group-${index}`;
+                
+                // Format the header date display nicely
+                let displayDate = date;
+                if(date !== 'Unspecified Date') {
+                    // Splits YYYY-MM-DD to display natively based on local settings, or hardcode format
+                    const d = new Date(date);
+                    displayDate = d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+                }
+
+                // Build table rows for this group
+                let rowsHtml = '';
+                tasks.forEach(task => {
+                    const isOverdue = task.targetDate && new Date(task.targetDate) < new Date() && task.status !== 'Closed';
+                    const dateStr = task.targetDate ? new Date(task.targetDate).toISOString().split('T')[0] : '--';
+                    
+                    let priorityClass = task.priority === 'High' ? 'badge-high' : (task.priority === 'Low' ? 'badge-low' : 'badge-med');
+                    let statusClass = task.status === 'Closed' ? 'badge-closed' : (task.status === 'WIP' ? 'badge-wip' : '');
+                    if(isOverdue) statusClass = 'badge-overdue';
+
+                    rowsHtml += `
+                        <tr>
+                            <td><b>${task.category}</b></td>
+                            <td>${task.desc}</td>
+                            <td>${task.owner || '-'}</td>
+                            <td><span class="badge ${priorityClass}">${task.priority}</span></td>
+                            <td>${dateStr}</td>
+                            <td><span class="badge ${statusClass}">${isOverdue ? 'Overdue' : task.status}</span></td>
+                            <td style="font-size:0.9rem; color:#64748b;">${task.remarks || ''}</td>
+                            <td>
+                                <button class="action-btn" onclick="openEditModal('${task._id}')" title="Edit">✎</button>
+                                <button class="action-btn" onclick="deleteTask('${task._id}')" title="Delete" style="color:var(--danger)">🗑</button>
+                            </td>
+                        </tr>`;
+                });
+
+                // Wrap rows in standard table structure inside a collapsible div
+                const groupHtml = `
+                    <div class="date-group">
+                        <div class="date-group-header" onclick="toggleGroup('${safeId}')">
+                            <span>🗓 Discussion Date: <b>${displayDate}</b> (${tasks.length} items)</span>
+                            <span class="toggle-icon">▼</span>
+                        </div>
+                        <div class="date-group-content" id="${safeId}">
+                            <div class="table-container">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th width="12%">Category</th>
+                                            <th width="25%">Action Item</th>
+                                            <th width="10%">Owner</th>
+                                            <th width="8%">Priority</th>
+                                            <th width="10%">Target Date</th>
+                                            <th width="10%">Status</th>
+                                            <th width="15%">Remarks</th>
+                                            <th width="10%">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${rowsHtml}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                container.innerHTML += groupHtml;
+            });
+        }
+
+        // Toggle Accordion functionality
+        function toggleGroup(safeId) {
+            const content = document.getElementById(safeId);
+            content.classList.toggle('collapsed');
+        }
+
+        // === 5. Dashboard Stats ===
+        function updateStats(dataSet = allTasks) {
+            const total = dataSet.length;
+            const closed = dataSet.filter(t => t.status === 'Closed').length;
+            const wip = dataSet.filter(t => t.status === 'WIP').length;
+            const overdue = dataSet.filter(t => t.targetDate && new Date(t.targetDate) < new Date() && t.status !== 'Closed').length;
+
+            document.getElementById('stat-total').innerText = total;
+            document.getElementById('stat-wip').innerText = wip;
+            document.getElementById('stat-overdue').innerText = overdue;
+            
+            const rate = total === 0 ? 0 : Math.round((closed / total) * 100);
+            document.getElementById('stat-rate').innerText = rate + '%';
+            document.getElementById('progress-bar').style.width = rate + '%';
+        }
+
+        // === 6. CRUD Operations ===
+        function openModal() { 
+            document.getElementById('taskModal').classList.add('active'); 
+            document.querySelector('form').reset(); 
+            document.getElementById('inp-id').value = ""; 
+            // Default discussion date to today
+            document.getElementById('inp-disc-date').value = new Date().toISOString().split('T')[0];
+        }
+        function closeModal() { document.getElementById('taskModal').classList.remove('active'); }
+
+        function openEditModal(id) {
+            const task = allTasks.find(t => t._id === id);
+            if(!task) return;
+            document.getElementById('taskModal').classList.add('active');
+            document.getElementById('modal-title').innerText = "Edit Task";
+            document.getElementById('inp-id').value = task._id;
+            
+            if(task.discussionDate) document.getElementById('inp-disc-date').value = new Date(task.discussionDate).toISOString().split('T')[0];
+            document.getElementById('inp-category').value = task.category || "";
+            document.getElementById('inp-desc').value = task.desc || "";
+            document.getElementById('inp-owner').value = task.owner || "";
+            document.getElementById('inp-priority').value = task.priority || "Medium";
+            document.getElementById('inp-status').value = task.status || "Not Started";
+            document.getElementById('inp-remarks').value = task.remarks || "";
+            if(task.targetDate) document.getElementById('inp-date').value = new Date(task.targetDate).toISOString().split('T')[0];
+        }
+
+        async function saveTask(e) {
+            e.preventDefault();
+            const id = document.getElementById('inp-id').value;
+            const payload = {
+                discussionDate: document.getElementById('inp-disc-date').value,
+                category: document.getElementById('inp-category').value,
+                desc: document.getElementById('inp-desc').value,
+                owner: document.getElementById('inp-owner').value,
+                priority: document.getElementById('inp-priority').value,
+                status: document.getElementById('inp-status').value,
+                targetDate: document.getElementById('inp-date').value,
+                remarks: document.getElementById('inp-remarks').value
+            };
+            const method = id ? 'PUT' : 'POST';
+            const url = id ? `${API_URL}/${id}` : API_URL;
+            await fetch(url, { method: method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+            closeModal();
+            fetchTasks(); 
+        }
+
+        async function deleteTask(id) {
+            if(confirm('Delete this task?')) {
+                await fetch(`${API_URL}/${id}`, { method: 'DELETE' });
+                fetchTasks();
+            }
+        }
+
+        function exportToCSV() {
+            let dataToExport = displayedTasks; 
+            let csvContent = "data:text/csv;charset=utf-8,Discussion Date,Category,Action Item,Owner,Priority,Target Date,Status,Remarks\n";
+            dataToExport.forEach(t => {
+                const discDate = t.discussionDate ? new Date(t.discussionDate).toISOString().split('T')[0] : 'Unspecified';
+                const targetDate = t.targetDate ? new Date(t.targetDate).toISOString().split('T')[0] : '';
+                const desc = `"${(t.desc || '').replace(/"/g, '""')}"`;
+                const remarks = `"${(t.remarks || '').replace(/"/g, '""')}"`;
+                
+                csvContent += [discDate, t.category, desc, t.owner, t.priority, targetDate, t.status, remarks].join(",") + "\r\n";
             });
             const encodedUri = encodeURI(csvContent);
             const link = document.createElement("a");
